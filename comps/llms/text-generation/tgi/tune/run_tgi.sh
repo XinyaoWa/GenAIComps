@@ -3,9 +3,9 @@ max_total_tokens=20480
 
 port_number=8080
 model_name="meta-llama/Llama-2-7b-hf"
-HUGGING_FACE_HUB_TOKEN="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"
-volume="/home/jenkins/xinyao/data"
-workdir="/home/jenkins/xinyao/tgi"
+HUGGING_FACE_HUB_TOKEN=""
+volume=""
+workdir=""
 
 ## single cards
 docker run --rm -it \
