@@ -1,13 +1,12 @@
-max_input_tokens=10240
-max_total_tokens=20480
+max_input_tokens=2048
+max_total_tokens=4096
 
-port_number=8080
-model_name="meta-llama/Llama-2-7b-hf"
+port_number=8081
+model_name="meta-llama/Meta-Llama-3-8B-Instruct"
 HUGGING_FACE_HUB_TOKEN=""
 volume=""
 workdir=""
 
-## single cards
 docker run --rm -it \
     --name="ChatQnA_server" \
     -p $port_number:80 \
@@ -26,8 +25,28 @@ docker run --rm -it \
     --max-input-tokens $max_input_tokens \
     --max-total-tokens $max_total_tokens
 
-##Arguments
-# -e PT_HPU_LAZY_MODE=0
+## optimize batch size
+docker run -it --rm\
+    --name="ChatQnA_server" \
+    -p $port_number:80 \
+    -v $volume:/data \
+    -v $workdir:/home/work/ \
+    --runtime=habana \
+    -e HUGGING_FACE_HUB_TOKEN="" \
+    -e HABANA_VISIBLE_DEVICES=all \
+    -e OMPI_MCA_btl_vader_single_copy_mechanism=none \
+    -e PREFILL_BATCH_BUCKET_SIZE=1 \
+    -e BATCH_BUCKET_SIZE=8 \
+    --cap-add=sys_nice \
+    --ipc=host \
+    -e HTTPS_PROXY=$https_proxy \
+    -e HTTP_PROXY=$https_proxy \
+    ghcr.io/huggingface/tgi-gaudi:2.0.1 \
+    --model-id $model_name \
+    --max-input-tokens $max_input_tokens \
+    --max-total-tokens $max_total_tokens \
+    --max-batch-total-tokens 65536 \
+    --max-batch-prefill-tokens 4096
 
 ##########################################################################################################################
 ## multi cards
