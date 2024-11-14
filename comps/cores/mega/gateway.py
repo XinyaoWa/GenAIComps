@@ -411,20 +411,34 @@ class TranslationGateway(Gateway):
 class DocSumGateway(Gateway):
     def __init__(self, megaservice, host="0.0.0.0", port=8888):
         super().__init__(
-            megaservice,
-            host,
-            port,
-            str(MegaServiceEndpoint.DOC_SUMMARY),
-            input_datatype=DocSumChatCompletionRequest,
-            output_datatype=ChatCompletionResponse,
+            megaservice, host, port, str(MegaServiceEndpoint.DOC_SUMMARY), ChatCompletionRequest, ChatCompletionResponse
         )
 
-    async def handle_request(self, request: Request):
-        data = await request.json()
+    async def handle_request(self, request: Request, files: List[UploadFile] = File(default=None)):
+        data = await request.form()
         stream_opt = data.get("stream", True)
-        chat_request = ChatCompletionRequest.model_validate(data)
+        chat_request = ChatCompletionRequest.parse_obj(data)
+        file_summaries = []
+        if files:
+            for file in files:
+                file_path = f"/tmp/{file.filename}"
 
-        prompt = self._handle_message(chat_request.messages)
+                import aiofiles
+
+                async with aiofiles.open(file_path, "wb") as f:
+                    await f.write(await file.read())
+                docs = read_text_from_file(file, file_path)
+                os.remove(file_path)
+                if isinstance(docs, list):
+                    file_summaries.extend(docs)
+                else:
+                    file_summaries.append(docs)
+
+        if file_summaries:
+            prompt = self._handle_message(chat_request.messages) + "\n".join(file_summaries)
+        else:
+            prompt = self._handle_message(chat_request.messages)
+
         parameters = LLMParams(
             max_tokens=chat_request.max_tokens if chat_request.max_tokens else 1024,
             top_k=chat_request.top_k if chat_request.top_k else 10,
@@ -438,7 +452,7 @@ class DocSumGateway(Gateway):
             model=chat_request.model if chat_request.model else None,
         )
         result_dict, runtime_graph = await self.megaservice.schedule(
-            initial_inputs={data["type"]: prompt}, llm_parameters=parameters
+            initial_inputs={"query": prompt}, llm_parameters=parameters
         )
         for node, response in result_dict.items():
             # Here it suppose the last microservice in the megaservice is LLM.
