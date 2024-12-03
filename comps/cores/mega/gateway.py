@@ -307,7 +307,7 @@ class CodeGenGateway(Gateway):
         return ChatCompletionResponse(model="codegen", choices=choices, usage=usage)
 
 
-class CodeTransGateway(Gateway):
+class TranslationGateway(Gateway):
     def __init__(self, megaservice, host="0.0.0.0", port=8888):
         super().__init__(
             megaservice, host, port, str(MegaServiceEndpoint.CODE_TRANS), ChatCompletionRequest, ChatCompletionResponse
@@ -315,22 +315,35 @@ class CodeTransGateway(Gateway):
 
     async def handle_request(self, request: Request):
         data = await request.json()
+        language_type = data["language_type"] ## "text" or "code"
         language_from = data["language_from"]
         language_to = data["language_to"]
-        source_code = data["source_code"]
-        prompt_template = """
-            ### System: Please translate the following {language_from} codes into {language_to} codes. Don't output any other content except translated codes.
+        source_language = data["source_language"]
+        if language_type == "text":
+            prompt_template_text = """
+                Translate this from {language_from} to {language_to}:
 
-            ### Original {language_from} codes:
-            '''
+                {language_from}:
+                {source_language}
 
-            {source_code}
+                {language_to}:
+            """
+        elif language_type == "code":
+            prompt_template_code = """
+                ### System: Please translate the following {language_from} codes into {language_to} codes. Don't output any other content except translated codes.
 
-            '''
+                ### Original {language_from} codes:
+                '''
 
-            ### Translated {language_to} codes:
+                {source_language}
 
-        """
+                '''
+
+                ### Translated {language_to} codes:
+
+            """
+        else:
+            raise NotImplementedError
         prompt = prompt_template.format(language_from=language_from, language_to=language_to, source_code=source_code)
 
         parameters = LLMParams(
